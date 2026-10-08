@@ -83,7 +83,6 @@
     .view { display: none; }
     .active { display: block; }
 
-    /* 隱藏 html5-qrcode 預設不必要的邊框裝飾 */
     #reader video {
       object-fit: cover !important;
       border: 4px solid #000 !important;
@@ -93,10 +92,9 @@
 <body class="min-h-screen py-8 px-4 font-sans text-neo-black antialiased">
 
   <script>
-    // ⚠️ 填入你的 Google Apps Script Web App URL
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyJHgjzPYRVZFKuBIAnwKh9MCReWtZ3l_dnfwDLEBRXv4emh30HsRfPhwTVpvTBIsb3zQ/exec";
+    // ⚠️ 請填入你的 Apps Script 部署 URL
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4VVz76LEaWZQeWDE8bBfD3mAxZ9wn04_o6UNLLKkf/dev";
 
-    // 通用 API 發送函式
     async function apiCall(action, payload = {}) {
       try {
         const res = await fetch(GAS_API_URL, {
@@ -216,7 +214,7 @@
     <!-- Datalist 小學自動完成清單 -->
     <datalist id="primarySchoolsList"></datalist>
 
-    <!-- 3. 電子確認卡 View (含動態 QR Code 生成) -->
+    <!-- 3. 電子確認卡 View -->
     <div id="view-confirm" class="view card-neo p-6 md:p-8 bg-neo-secondary relative">
       <div class="absolute -top-4 -left-4 bg-neo-accent text-white border-4 border-black px-3 py-1 font-black -rotate-6 text-sm shadow-neo-sm">
         CONFIRMED PASS
@@ -227,7 +225,6 @@
 
       <div class="border-4 border-black bg-white p-6 shadow-neo mb-6 text-center">
         
-        <!-- 自動渲染 QR Code -->
         <div class="flex justify-center my-2">
           <div id="qrcodeBox" class="p-3 border-4 border-black bg-white shadow-neo-sm"></div>
         </div>
@@ -317,7 +314,7 @@
       </div>
     </div>
 
-    <!-- 5. 點名介面 View (相機掃 QR + 鍵盤手動輸入雙模式) -->
+    <!-- 5. 點名介面 View -->
     <div id="view-admin" class="view card-neo p-6 md:p-8 bg-white">
       <h3 class="text-3xl font-black uppercase mb-4 border-b-4 border-black pb-2">現場點名工作台</h3>
 
@@ -336,7 +333,7 @@
 
       <div id="adminPanel" class="hidden space-y-4">
         
-        <!-- 相機 QR 掃描控制區 -->
+        <!-- 相機 QR Code 掃描區 -->
         <div class="border-4 border-black p-3 bg-neo-bg shadow-neo-sm">
           <div class="flex justify-between items-center mb-2">
             <span class="font-black text-lg">📷 相機 QR Code 掃描</span>
@@ -352,7 +349,7 @@
           </div>
         </div>
 
-        <!-- 手動 5位字碼 / 電話點名輸入框 -->
+        <!-- 手動點名輸入框 -->
         <form onsubmit="handleAdminSubmit(event)" class="space-y-3">
           <div>
             <label class="block font-black text-base uppercase mb-1">手動輸入 5位字碼 或 8位電話：</label>
@@ -394,289 +391,7 @@
     let lastScannedCode = '';
     let lastScanTime = 0;
 
-    // 頁面載入時請求小學名單
-    window.addEventListener('DOMContentLoaded', async () => {
-      const res = await apiCall('getSchoolList');
-      if (res.success && res.list && res.list.length > 0) {
-        const list = document.getElementById('primarySchoolsList');
-        list.innerHTML = '';
-        res.list.forEach(sch => {
-          const opt = document.createElement('option');
-          opt.value = sch;
-          list.appendChild(opt);
-        });
-      }
-    });
-
-    // 切換 View，關閉相機並滾動回頂部
-    function showView(viewId) {
-      stopScanner();
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.getElementById(viewId).classList.add('active');
-      document.getElementById('editBox').classList.add('hidden');
-      document.getElementById('queryBox').classList.remove('hidden');
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    // 1. 處理報名提交
-    async function handleRegister(e) {
-      e.preventDefault();
-      const phone = document.getElementById('regPhone').value.trim();
-      if (phone.length !== 8) {
-        alert('聯絡電話必須為精確 8 位數字！');
-        return;
-      }
-
-      const formData = {
-        parentName: document.getElementById('regParent').value.trim(),
-        phone: phone,
-        attendees: document.getElementById('regAttendees').value,
-        studentName: document.getElementById('regStudent').value.trim(),
-        school: document.getElementById('regSchool').value.trim(),
-        grade: document.getElementById('regGrade').value
-      };
-
-      const btn = document.getElementById('regBtn');
-      btn.disabled = true;
-      btn.innerText = '處理中 SUBMITTING...';
-
-      const res = await apiCall('submitRegistration', formData);
-      btn.disabled = false;
-      btn.innerText = '確認提交 SUBMIT';
-
-      if (res.success) {
-        showConfirmationCard(res.code, res.data);
-      } else {
-        alert(res.message);
-      }
-    }
-
-    // 生成專屬卡與 QR Code
-    function showConfirmationCard(code, data) {
-      document.getElementById('cardCode').innerText = code;
-      document.getElementById('cardParent').innerText = data.parentName;
-      document.getElementById('cardAttendees').innerText = data.attendees;
-      document.getElementById('cardStudent').innerText = data.studentName;
-      document.getElementById('cardPhone').innerText = data.phone;
-
-      // 生成 QR Code
-      const qrBox = document.getElementById('qrcodeBox');
-      qrBox.innerHTML = '';
-      new QRCode(qrBox, {
-        text: code,
-        width: 160,
-        height: 160,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
-      });
-
-      showView('view-confirm');
-    }
-
-    // 2. 處理查詢
-    async function handleQuery() {
-      const code = document.getElementById('qCode').value.trim();
-      const phone = document.getElementById('qPhone').value.trim();
-
-      if (!code || !phone) {
-        alert('請輸入 5 位專屬字碼及 8 位聯絡電話！');
-        return;
-      }
-
-      const btn = document.getElementById('queryBtn');
-      btn.disabled = true;
-      btn.innerText = '搜尋中...';
-
-      const res = await apiCall('checkStatus', { code: code, phone: phone });
-      btn.disabled = false;
-      btn.innerText = '🔎 尋找紀錄 SEARCH';
-
-      if (res.success) {
-        const r = res.record;
-        document.getElementById('editPhone').value = r.phone;
-        document.getElementById('editParent').value = r.parentName;
-        document.getElementById('editAttendees').value = r.attendees;
-        document.getElementById('editStudent').value = r.studentName;
-        document.getElementById('editSchool').value = r.school;
-        document.getElementById('editGrade').value = r.grade;
-
-        document.getElementById('queryBox').classList.add('hidden');
-        document.getElementById('editBox').classList.remove('hidden');
-        window.currentEditCode = r.code;
-      } else {
-        alert(res.message);
-      }
-    }
-
-    // 3. 處理更新
-    async function handleUpdate(e) {
-      e.preventDefault();
-      const formData = {
-        code: window.currentEditCode,
-        phone: document.getElementById('editPhone').value,
-        parentName: document.getElementById('editParent').value.trim(),
-        attendees: document.getElementById('editAttendees').value,
-        studentName: document.getElementById('editStudent').value.trim(),
-        school: document.getElementById('editSchool').value.trim(),
-        grade: document.getElementById('editGrade').value
-      };
-
-      const btn = document.getElementById('updateBtn');
-      btn.disabled = true;
-
-      const res = await apiCall('updateRegistration', formData);
-      btn.disabled = false;
-
-      if (res.success) {
-        alert(res.message);
-        showView('view-home');
-      } else {
-        alert(res.message);
-      }
-    }
-
-    // 4. 點名登入
-    function openAdminModal() {
-      showView('view-admin');
-      document.getElementById('adminLoginBox').classList.remove('hidden');
-      document.getElementById('adminPanel').classList.add('hidden');
-      document.getElementById('adminPwd').value = '';
-    }
-
-    async function loginAdmin() {
-      const pwd = document.getElementById('adminPwd').value.trim();
-      if (!pwd) return;
-
-      const btn = document.getElementById('loginBtn');
-      btn.disabled = true;
-
-      const res = await apiCall('getAdminData', { password: pwd });
-      btn.disabled = false;
-
-      if (res.success) {
-        document.getElementById('adminLoginBox').classList.add('hidden');
-        document.getElementById('adminPanel').classList.remove('hidden');
-        adminLocalList = res.list;
-        updateAdminStats();
-        setTimeout(() => document.getElementById('checkInInput').focus(), 300);
-      } else {
-        alert(res.message);
-      }
-    }
-
-    // 5. 相機掃描啟動 / 關閉邏輯
-    function startScanner() {
-      if (isScanning) return;
-      html5QrCode = new Html5Qrcode("reader");
-      const config = { fps: 10, qrbox: { width: 220, height: 220 } };
-
-      html5QrCode.start(
-        { facingMode: "environment" },
-        config,
-        onScanSuccess
-      ).then(() => {
-        isScanning = true;
-        document.getElementById('startScanBtn').classList.add('hidden');
-        document.getElementById('stopScanBtn').classList.remove('hidden');
-      }).catch(err => {
-        alert('無法開啟相機，請確保已允許瀏覽器使用相機權限！\n' + err);
-      });
-    }
-
-    function stopScanner() {
-      if (html5QrCode && isScanning) {
-        html5QrCode.stop().then(() => {
-          html5QrCode.clear();
-          isScanning = false;
-          document.getElementById('startScanBtn').classList.remove('hidden');
-          document.getElementById('stopScanBtn').classList.add('hidden');
-        }).catch(err => console.error(err));
-      }
-    }
-
-    // QR Code 掃描成功觸發
-    function onScanSuccess(decodedText) {
-      const now = Date.now();
-      // 防呆：3秒內禁止重複掃描相同 QR Code
-      if (decodedText === lastScannedCode && (now - lastScanTime) < 3000) {
-        return;
-      }
-      lastScannedCode = decodedText;
-      lastScanTime = now;
-
-      document.getElementById('checkInInput').value = decodedText;
-      executeCheckIn();
-    }
-
-    function handleAdminSubmit(e) {
-      e.preventDefault();
-      executeCheckIn();
-    }
-
-    async function executeCheckIn() {
-      const inputEl = document.getElementById('checkInInput');
-      const input = inputEl.value.trim();
-      if (!input) return;
-
-      const msgBox = document.getElementById('checkInMsg');
-      msgBox.innerHTML = '<div class="p-3 border-4 border-black bg-gray-100 font-bold text-center">點名寫入中...</div>';
-
-      const res = await apiCall('markCheckIn', { query: input });
-      inputEl.value = '';
-      inputEl.focus();
-
-      if (res.success) {
-        if (res.alreadyAttended) {
-          msgBox.innerHTML = `
-            <div class="border-4 border-black bg-neo-secondary p-4 font-bold text-base shadow-neo-sm">
-              ⚠️ <b>重複點名警告！</b><br>
-              ${res.parentName} 家長（學生：${res.studentName}，${res.attendees}位）<br>
-              已於 <b>${res.checkInTime}</b> 完成點名！
-            </div>`;
-        } else {
-          msgBox.innerHTML = `
-            <div class="border-4 border-black bg-neo-accent text-white p-4 font-bold text-base shadow-neo-sm">
-              ✅ <b>點名成功！</b><br>
-              ${res.parentName} 家長（學生：${res.studentName}）<br>
-              出席人數：<b>${res.attendees}</b> 人
-            </div>`;
-          
-          const item = adminLocalList.find(x => x.code === res.code || x.phone === input);
-          if (item) item.attended = true;
-          updateAdminStats();
-        }
-      } else {
-        msgBox.innerHTML = `<div class="border-4 border-black bg-red-400 text-black p-4 font-bold text-base shadow-neo-sm">❌ ${res.message}</div>`;
-      }
-    }
-
-    function updateAdminStats() {
-      const total = adminLocalList.length;
-      const attendedItems = adminLocalList.filter(x => x.attended);
-      const attendedCount = attendedItems.length;
-      const totalPeople = attendedItems.reduce((sum, item) => sum + Number(item.attendees), 0);
-
-      document.getElementById('statTotal').innerText = total;
-      document.getElementById('statAttended').innerText = attendedCount;
-      document.getElementById('statPeople').innerText = totalPeople;
-    }
-
-    function exitAdmin() {
-      stopScanner();
-      showView('view-home');
-    }
-
-let adminLocalList = [];
-    let html5QrCode = null;
-    let isScanning = false;
-    let lastScannedCode = '';
-    let lastScanTime = 0;
-
-    // ----------------------------------------------------
-    // Web Audio API 原生音效合成器 (免下載外部檔案，iOS Safari 即時響應)
-    // ----------------------------------------------------
+    // Web Audio API 原生音效合成器 (免下載音檔，即時響應)
     let audioCtx = null;
 
     function initAudio() {
@@ -698,7 +413,7 @@ let adminLocalList = [];
         gain.connect(audioCtx.destination);
 
         if (type === 'success') {
-          // 🟢 成功：雙音階清脆提示音 (587Hz -> 880Hz)
+          // 🟢 成功：雙音階上升清脆提示音 (587Hz -> 880Hz)
           osc.type = 'sine';
           osc.frequency.setValueAtTime(587.33, now);
           osc.frequency.setValueAtTime(880, now + 0.1);
@@ -708,7 +423,7 @@ let adminLocalList = [];
           osc.stop(now + 0.35);
 
         } else if (type === 'warning') {
-          // 🟡 重複點名：中低頻雙重警示音 (440Hz -> 349Hz)
+          // 🟡 重複點名：警示音 (440Hz -> 349Hz)
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(440, now);
           osc.frequency.setValueAtTime(349.23, now + 0.12);
@@ -746,6 +461,7 @@ let adminLocalList = [];
       }
     });
 
+    // 切換 View 頁面並平滑滾動至最頂端
     function showView(viewId) {
       stopScanner();
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -789,6 +505,7 @@ let adminLocalList = [];
       }
     }
 
+    // 渲染確認卡與專屬 QR Code
     function showConfirmationCard(code, data) {
       document.getElementById('cardCode').innerText = code;
       document.getElementById('cardParent').innerText = data.parentName;
@@ -872,9 +589,9 @@ let adminLocalList = [];
       }
     }
 
-    // 4. 點名登入 (解鎖音效權限)
+    // 4. 點名登入 (解鎖 Web Audio 權限)
     function openAdminModal() {
-      initAudio(); // 預先解鎖音效 Context
+      initAudio();
       showView('view-admin');
       document.getElementById('adminLoginBox').classList.remove('hidden');
       document.getElementById('adminPanel').classList.add('hidden');
@@ -968,7 +685,7 @@ let adminLocalList = [];
 
       if (res.success) {
         if (res.alreadyAttended) {
-          // 🟡 播放重複點名警示音
+          // 🟡 重複點名警示音
           playSound('warning');
           msgBox.innerHTML = `
             <div class="border-4 border-black bg-neo-secondary p-4 font-bold text-base shadow-neo-sm">
@@ -977,7 +694,7 @@ let adminLocalList = [];
               已於 <b>${res.checkInTime}</b> 完成點名！
             </div>`;
         } else {
-          // 🟢 播放點名成功提示音
+          // 🟢 點名成功提示音
           playSound('success');
           msgBox.innerHTML = `
             <div class="border-4 border-black bg-neo-accent text-white p-4 font-bold text-base shadow-neo-sm">
@@ -991,7 +708,7 @@ let adminLocalList = [];
           updateAdminStats();
         }
       } else {
-        // 🔴 播放錯誤提示音
+        // 🔴 錯誤提示音
         playSound('error');
         msgBox.innerHTML = `<div class="border-4 border-black bg-red-400 text-black p-4 font-bold text-base shadow-neo-sm">❌ ${res.message}</div>`;
       }
@@ -1012,7 +729,6 @@ let adminLocalList = [];
       stopScanner();
       showView('view-home');
     }
-    
   </script>
 
 </body>
