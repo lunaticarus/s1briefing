@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>中一簡介會報名平台 | S.1 Admission Briefing</title>
+  
+  <!-- 字體：Space Grotesk & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=Space+Grotesk:wght@500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- QRCode.js (生成 QR Code) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- html5-qrcode (相機掃描 QR Code) -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'neo-bg': '#FFFDF5',
+            'neo-black': '#000000',
+            'neo-accent': '#FF6B6B',   /* Hot Red */
+            'neo-secondary': '#FFD93D', /* Vivid Yellow */
+            'neo-muted': '#C4B5FD',     /* Soft Violet */
+          },
+          fontFamily: {
+            sans: ['"Space Grotesk"', '"Noto Sans TC"', 'sans-serif'],
+          },
+          boxShadow: {
+            'neo-sm': '4px 4px 0px 0px #000000',
+            'neo': '8px 8px 0px 0px #000000',
+            'neo-lg': '12px 12px 0px 0px #000000',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #FFFDF5;
+      background-image: 
+        linear-gradient(to right, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    .btn-neo {
+      border: 4px solid #000;
+      box-shadow: 6px 6px 0px 0px #000;
+      transition: all 0.1s linear;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .btn-neo:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 8px 8px 0px 0px #000;
+    }
+    .btn-neo:active {
+      transform: translate(4px, 4px);
+      box-shadow: 2px 2px 0px 0px #000;
+    }
+
+    .card-neo {
+      background-color: #FFFFFF;
+      border: 4px solid #000000;
+      box-shadow: 10px 10px 0px 0px #000000;
+      border-radius: 0px;
+    }
+
+    input:focus, select:focus {
+      outline: none !important;
+      background-color: #FFD93D !important;
+      box-shadow: 4px 4px 0px 0px #000000 !important;
+    }
+
+    .view { display: none; }
+    .active { display: block; }
+
+    /* 隱藏 html5-qrcode 預設不必要的邊框裝飾 */
+    #reader video {
+      object-fit: cover !important;
+      border: 4px solid #000 !important;
+    }
+  </style>
+</head>
+<body class="min-h-screen py-8 px-4 font-sans text-neo-black antialiased">
+
+  <script>
+    // ⚠️ 填入你的 Google Apps Script Web App URL
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyJHgjzPYRVZFKuBIAnwKh9MCReWtZ3l_dnfwDLEBRXv4emh30HsRfPhwTVpvTBIsb3zQ/exec";
+
+    // 通用 API 發送函式
+    async function apiCall(action, payload = {}) {
+      try {
+        const res = await fetch(GAS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: action, payload: payload })
+        });
+        return await res.json();
+      } catch (err) {
+        return { success: false, message: '網絡連線失敗：' + err.message };
+      }
+    }
+  </script>
+
+  <div class="max-w-xl mx-auto relative pt-6 md:pt-8">
+    
+    <!-- 特大校徽 Badge -->
+    <div class="absolute -top-5 left-1 md:left-3 z-40 bg-white border-4 border-black p-2 md:p-2.5 shadow-neo -rotate-3 hover:rotate-0 transition-transform">
+      <img src="https://lunaticarus.github.io/classtools/logo.png" alt="校徽" class="h-20 md:h-24 w-auto object-contain">
+    </div>
+
+    <!-- Header Sticker -->
+    <div class="mb-5 mt-1 ml-32 md:ml-40 inline-block bg-neo-accent text-white font-black text-xs md:text-sm uppercase tracking-widest px-4 py-2 border-4 border-black shadow-neo-sm -rotate-2">
+      S.1 Admission Briefing
+    </div>
+
+    <!-- 1. 主頁 View -->
+    <div id="view-home" class="view active card-neo p-6 md:p-8 bg-white">
+      <h1 class="text-4xl md:text-5xl font-black tracking-tight leading-none mb-4 uppercase">
+        中一入學<br><span class="bg-neo-secondary px-2 border-2 border-black inline-block mt-1">簡介會報名</span>
+      </h1>
+      
+      <p class="font-bold text-lg mb-6 leading-snug">
+        歡迎家長及小六學生參加！親臨了解本校辦學理念、校園設施及中一收生最新安排。
+      </p>
+
+      <div class="border-4 border-black bg-neo-muted p-4 mb-6 shadow-neo-sm rotate-1">
+        <div class="font-black text-xl uppercase mb-2 border-b-4 border-black pb-1">📌 活動詳情</div>
+        <ul class="font-bold space-y-2 text-base">
+          <li>📍 <b>地點：</b> 學校大禮堂</li>
+          <li>📅 <b>日期：</b> 本學年簡介會指定日期</li>
+          <li>🕒 <b>時間：</b> 下午 2:00 - 4:00</li>
+        </ul>
+      </div>
+
+      <div class="space-y-4 pt-2">
+        <button onclick="showView('view-register')" class="btn-neo w-full py-4 text-xl bg-neo-accent text-white">
+          🚀 立即報名 REGISTER NOW
+        </button>
+        <button onclick="showView('view-query')" class="btn-neo w-full py-4 text-xl bg-neo-secondary text-black">
+          🔍 查詢 / 修改報名狀態
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. 報名表單 View -->
+    <div id="view-register" class="view card-neo p-6 md:p-8 bg-white">
+      <div class="flex justify-between items-center mb-6 border-b-4 border-black pb-3">
+        <h2 class="text-3xl font-black uppercase">填寫報名資料</h2>
+        <span class="bg-neo-accent text-white font-black px-2 py-1 border-2 border-black text-xs -rotate-3">FORM</span>
+      </div>
+
+      <form id="regForm" onsubmit="handleRegister(event)" class="space-y-4">
+        <div>
+          <label class="block font-black text-base uppercase mb-1">家長姓名 *</label>
+          <input type="text" id="regParent" class="w-full p-3 border-4 border-black font-bold text-lg bg-white" placeholder="請輸入姓名" required>
+        </div>
+
+        <div>
+          <label class="block font-black text-base uppercase mb-1">聯絡電話 * (只限 8 位數字)</label>
+          <input type="tel" id="regPhone" maxlength="8" pattern="\d{8}" class="w-full p-3 border-4 border-black font-bold text-lg bg-white" placeholder="例如: 91234567" required oninput="this.value=this.value.replace(/\D/g,'')">
+        </div>
+
+        <div>
+          <label class="block font-black text-base uppercase mb-1">出席人數 * (最多 3 人)</label>
+          <select id="regAttendees" class="w-full p-3 border-4 border-black font-bold text-lg bg-white" required>
+            <option value="1">1 人</option>
+            <option value="2" selected>2 人</option>
+            <option value="3">3 人</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-black text-base uppercase mb-1">學生姓名 *</label>
+          <input type="text" id="regStudent" class="w-full p-3 border-4 border-black font-bold text-lg bg-white" placeholder="請輸入學生中文/英文姓名" required>
+        </div>
+
+        <div>
+          <label class="block font-black text-base uppercase mb-1">就讀小學 * (可輸入關鍵字搜尋)</label>
+          <input type="text" id="regSchool" list="primarySchoolsList" class="w-full p-3 border-4 border-black font-bold text-lg bg-white" placeholder="輸入關鍵字 (如: 仁立 / 葵官)" required>
+        </div>
+
+        <div>
+          <label class="block font-black text-base uppercase mb-1">本年度級別 *</label>
+          <select id="regGrade" class="w-full p-3 border-4 border-black font-bold text-lg bg-white" required>
+            <option value="小六" selected>小六 (P.6)</option>
+            <option value="小五">小五 (P.5)</option>
+            <option value="其他">其他 (Others)</option>
+          </select>
+        </div>
+
+        <div class="border-4 border-black bg-neo-bg p-3 text-xs font-bold leading-relaxed">
+          🔒 <b>個人資料收集聲明：</b><br>
+          表格內所收集的個人資料只會用於處理有關簡介會申請，所有資料將於活動結束後刪除。
+        </div>
+
+        <button type="submit" id="regBtn" class="btn-neo w-full py-4 text-xl bg-neo-accent text-white mt-2">
+          確認提交 SUBMIT
+        </button>
+        <button type="button" onclick="showView('view-home')" class="btn-neo w-full py-3 text-lg bg-gray-200 text-black">
+          ← 返回主頁 BACK
+        </button>
+      </form>
+    </div>
+
+    <!-- Datalist 小學自動完成清單 -->
+    <datalist id="primarySchoolsList"></datalist>
+
+    <!-- 3. 電子確認卡 View (含動態 QR Code 生成) -->
+    <div id="view-confirm" class="view card-neo p-6 md:p-8 bg-neo-secondary relative">
+      <div class="absolute -top-4 -left-4 bg-neo-accent text-white border-4 border-black px-3 py-1 font-black -rotate-6 text-sm shadow-neo-sm">
+        CONFIRMED PASS
+      </div>
+
+      <h3 class="text-3xl font-black text-center uppercase tracking-tight mt-2 mb-1">報名成功確認卡</h3>
+      <p class="text-center font-bold text-sm mb-4">請即<b>「螢幕截圖」</b>保存此頁面，入場時向職員出示專屬 QR Code 或字碼</p>
+
+      <div class="border-4 border-black bg-white p-6 shadow-neo mb-6 text-center">
+        
+        <!-- 自動渲染 QR Code -->
+        <div class="flex justify-center my-2">
+          <div id="qrcodeBox" class="p-3 border-4 border-black bg-white shadow-neo-sm"></div>
+        </div>
+
+        <div class="font-black text-base uppercase tracking-wider text-gray-700 mt-2">入場點名專屬字碼</div>
+        <div id="cardCode" class="text-5xl font-black text-neo-accent tracking-widest my-2 border-y-4 border-black py-1 bg-neo-bg">- - - - -</div>
+
+        <div class="text-left font-bold space-y-2 text-base pt-2">
+          <div>👤 <b>家長姓名：</b> <span id="cardParent"></span></div>
+          <div>👨‍👩‍👦 <b>出席人數：</b> <span id="cardAttendees"></span> 人</div>
+          <div>🎓 <b>學生姓名：</b> <span id="cardStudent"></span></div>
+          <div>📞 <b>聯絡電話：</b> <span id="cardPhone"></span></div>
+        </div>
+      </div>
+
+      <button onclick="showView('view-home')" class="btn-neo w-full py-4 text-xl bg-black text-white">
+        完成並返回主頁 HOME
+      </button>
+    </div>
+
+    <!-- 4. 查詢 / 修改 View -->
+    <div id="view-query" class="view card-neo p-6 md:p-8 bg-white">
+      <h3 class="text-3xl font-black uppercase mb-4 border-b-4 border-black pb-2">查詢 / 修改報名</h3>
+      
+      <div id="queryBox" class="space-y-4">
+        <div>
+          <label class="block font-black text-base uppercase mb-1">5 位專屬字碼</label>
+          <input type="text" id="qCode" maxlength="5" pattern="\d{5}" class="w-full p-3 border-4 border-black font-bold text-lg" placeholder="例如: 18239" oninput="this.value=this.value.replace(/\D/g,'')">
+        </div>
+        <div>
+          <label class="block font-black text-base uppercase mb-1">聯絡電話 (8 位數字)</label>
+          <input type="tel" id="qPhone" maxlength="8" pattern="\d{8}" class="w-full p-3 border-4 border-black font-bold text-lg" placeholder="例如: 91234567" oninput="this.value=this.value.replace(/\D/g,'')">
+        </div>
+        <button onclick="handleQuery()" id="queryBtn" class="btn-neo w-full py-4 text-xl bg-neo-accent text-white">
+          🔎 尋找紀錄 SEARCH
+        </button>
+        <button onclick="showView('view-home')" class="btn-neo w-full py-3 text-lg bg-gray-200">
+          ← 返回主頁 BACK
+        </button>
+      </div>
+
+      <div id="editBox" class="hidden mt-6 space-y-4 border-t-4 border-black pt-4">
+        <div class="bg-neo-secondary border-4 border-black p-3 font-black text-center text-lg shadow-neo-sm">
+          ✅ 已找到報名紀錄（狀態：報名成功）
+        </div>
+
+        <form id="editForm" onsubmit="handleUpdate(event)" class="space-y-4">
+          <div>
+            <label class="block font-black text-base uppercase mb-1">聯絡電話 (不可修改)</label>
+            <input type="text" id="editPhone" class="w-full p-3 border-4 border-black font-bold text-lg bg-gray-200" disabled>
+          </div>
+          <div>
+            <label class="block font-black text-base uppercase mb-1">家長姓名</label>
+            <input type="text" id="editParent" class="w-full p-3 border-4 border-black font-bold text-lg" required>
+          </div>
+          <div>
+            <label class="block font-black text-base uppercase mb-1">出席人數</label>
+            <select id="editAttendees" class="w-full p-3 border-4 border-black font-bold text-lg" required>
+              <option value="1">1 人</option>
+              <option value="2">2 人</option>
+              <option value="3">3 人</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-black text-base uppercase mb-1">學生姓名</label>
+            <input type="text" id="editStudent" class="w-full p-3 border-4 border-black font-bold text-lg" required>
+          </div>
+          <div>
+            <label class="block font-black text-base uppercase mb-1">就讀小學</label>
+            <input type="text" id="editSchool" list="primarySchoolsList" class="w-full p-3 border-4 border-black font-bold text-lg" required>
+          </div>
+          <div>
+            <label class="block font-black text-base uppercase mb-1">本年度級別</label>
+            <select id="editGrade" class="w-full p-3 border-4 border-black font-bold text-lg" required>
+              <option value="小六">小六</option>
+              <option value="小五">小五</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <button type="submit" id="updateBtn" class="btn-neo w-full py-4 text-xl bg-neo-accent text-white">
+            💾 保存更新 SAVE
+          </button>
+          <button type="button" onclick="showView('view-home')" class="btn-neo w-full py-3 text-lg bg-gray-200">
+            取消 CANCEL
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 5. 點名介面 View (相機掃 QR + 鍵盤手動輸入雙模式) -->
+    <div id="view-admin" class="view card-neo p-6 md:p-8 bg-white">
+      <h3 class="text-3xl font-black uppercase mb-4 border-b-4 border-black pb-2">現場點名工作台</h3>
+
+      <div id="adminLoginBox" class="space-y-4">
+        <div>
+          <label class="block font-black text-base uppercase mb-1">輸入點名管理密碼</label>
+          <input type="password" id="adminPwd" class="w-full p-3 border-4 border-black font-bold text-lg">
+        </div>
+        <button onclick="loginAdmin()" id="loginBtn" class="btn-neo w-full py-4 text-xl bg-neo-accent text-white">
+          🔓 進入系統 LOGIN
+        </button>
+        <button onclick="showView('view-home')" class="btn-neo w-full py-3 text-lg bg-gray-200">
+          ← 返回主頁 BACK
+        </button>
+      </div>
+
+      <div id="adminPanel" class="hidden space-y-4">
+        
+        <!-- 相機 QR 掃描控制區 -->
+        <div class="border-4 border-black p-3 bg-neo-bg shadow-neo-sm">
+          <div class="flex justify-between items-center mb-2">
+            <span class="font-black text-lg">📷 相機 QR Code 掃描</span>
+            <button id="startScanBtn" onclick="startScanner()" class="btn-neo text-xs px-3 py-1.5 bg-green-400 text-black">
+              ▶ 開啟相機
+            </button>
+            <button id="stopScanBtn" onclick="stopScanner()" class="btn-neo text-xs px-3 py-1.5 bg-red-400 text-black hidden">
+              ⏹ 關閉相機
+            </button>
+          </div>
+          <div id="reader" class="w-full overflow-hidden min-h-[50px] bg-gray-100 flex items-center justify-center font-bold text-gray-500">
+            相機尚未啟動
+          </div>
+        </div>
+
+        <!-- 手動 5位字碼 / 電話點名輸入框 -->
+        <form onsubmit="handleAdminSubmit(event)" class="space-y-3">
+          <div>
+            <label class="block font-black text-base uppercase mb-1">手動輸入 5位字碼 或 8位電話：</label>
+            <input type="tel" id="checkInInput" placeholder="例如: 18239 或 91234567" class="w-full p-4 border-4 border-black font-black text-2xl tracking-widest bg-neo-bg" oninput="this.value=this.value.replace(/\D/g,'')">
+          </div>
+          
+          <button type="submit" id="checkInBtn" class="btn-neo w-full py-4 text-2xl bg-neo-accent text-white">
+            ⚡ 點名確認 CHECK-IN
+          </button>
+        </form>
+
+        <div id="checkInMsg"></div>
+
+        <div class="border-4 border-black bg-neo-secondary p-4 font-bold text-base shadow-neo-sm space-y-1 mt-4">
+          <div class="font-black text-lg border-b-2 border-black pb-1 mb-2">📊 即時出席概況</div>
+          <div>已到場戶數：<span id="statAttended" class="text-2xl font-black text-green-700">0</span> / 總報名：<span id="statTotal" class="font-black">0</span> 戶</div>
+          <div>已到場總人數：<span id="statPeople" class="text-2xl font-black text-green-700">0</span> 人</div>
+        </div>
+
+        <button onclick="exitAdmin()" class="btn-neo w-full py-3 text-lg bg-gray-200 mt-2">
+          退出點名 EXIT
+        </button>
+      </div>
+    </div>
+
+    <!-- 頁尾低調點名入口 -->
+    <div class="mt-10 mb-4 text-center">
+      <button onclick="openAdminModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-neo-secondary border-2 border-black text-xs font-bold text-gray-600 hover:text-black shadow-neo-sm transition-all" title="管理員入口">
+        ⚙️ 工作人員點名 (Admin)
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    let adminLocalList = [];
+    let html5QrCode = null;
+    let isScanning = false;
+    let lastScannedCode = '';
+    let lastScanTime = 0;
+
+    // 頁面載入時請求小學名單
+    window.addEventListener('DOMContentLoaded', async () => {
+      const res = await apiCall('getSchoolList');
+      if (res.success && res.list && res.list.length > 0) {
+        const list = document.getElementById('primarySchoolsList');
+        list.innerHTML = '';
+        res.list.forEach(sch => {
+          const opt = document.createElement('option');
+          opt.value = sch;
+          list.appendChild(opt);
+        });
+      }
+    });
+
+    // 切換 View，關閉相機並滾動回頂部
+    function showView(viewId) {
+      stopScanner();
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+      document.getElementById('editBox').classList.add('hidden');
+      document.getElementById('queryBox').classList.remove('hidden');
+      
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 1. 處理報名提交
+    async function handleRegister(e) {
+      e.preventDefault();
+      const phone = document.getElementById('regPhone').value.trim();
+      if (phone.length !== 8) {
+        alert('聯絡電話必須為精確 8 位數字！');
+        return;
+      }
+
+      const formData = {
+        parentName: document.getElementById('regParent').value.trim(),
+        phone: phone,
+        attendees: document.getElementById('regAttendees').value,
+        studentName: document.getElementById('regStudent').value.trim(),
+        school: document.getElementById('regSchool').value.trim(),
+        grade: document.getElementById('regGrade').value
+      };
+
+      const btn = document.getElementById('regBtn');
+      btn.disabled = true;
+      btn.innerText = '處理中 SUBMITTING...';
+
+      const res = await apiCall('submitRegistration', formData);
+      btn.disabled = false;
+      btn.innerText = '確認提交 SUBMIT';
+
+      if (res.success) {
+        showConfirmationCard(res.code, res.data);
+      } else {
+        alert(res.message);
+      }
+    }
+
+    // 生成專屬卡與 QR Code
+    function showConfirmationCard(code, data) {
+      document.getElementById('cardCode').innerText = code;
+      document.getElementById('cardParent').innerText = data.parentName;
+      document.getElementById('cardAttendees').innerText = data.attendees;
+      document.getElementById('cardStudent').innerText = data.studentName;
+      document.getElementById('cardPhone').innerText = data.phone;
+
+      // 生成 QR Code
+      const qrBox = document.getElementById('qrcodeBox');
+      qrBox.innerHTML = '';
+      new QRCode(qrBox, {
+        text: code,
+        width: 160,
+        height: 160,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      showView('view-confirm');
+    }
+
+    // 2. 處理查詢
+    async function handleQuery() {
+      const code = document.getElementById('qCode').value.trim();
+      const phone = document.getElementById('qPhone').value.trim();
+
+      if (!code || !phone) {
+        alert('請輸入 5 位專屬字碼及 8 位聯絡電話！');
+        return;
+      }
+
+      const btn = document.getElementById('queryBtn');
+      btn.disabled = true;
+      btn.innerText = '搜尋中...';
+
+      const res = await apiCall('checkStatus', { code: code, phone: phone });
+      btn.disabled = false;
+      btn.innerText = '🔎 尋找紀錄 SEARCH';
+
+      if (res.success) {
+        const r = res.record;
+        document.getElementById('editPhone').value = r.phone;
+        document.getElementById('editParent').value = r.parentName;
+        document.getElementById('editAttendees').value = r.attendees;
+        document.getElementById('editStudent').value = r.studentName;
+        document.getElementById('editSchool').value = r.school;
+        document.getElementById('editGrade').value = r.grade;
+
+        document.getElementById('queryBox').classList.add('hidden');
+        document.getElementById('editBox').classList.remove('hidden');
+        window.currentEditCode = r.code;
+      } else {
+        alert(res.message);
+      }
+    }
+
+    // 3. 處理更新
+    async function handleUpdate(e) {
+      e.preventDefault();
+      const formData = {
+        code: window.currentEditCode,
+        phone: document.getElementById('editPhone').value,
+        parentName: document.getElementById('editParent').value.trim(),
+        attendees: document.getElementById('editAttendees').value,
+        studentName: document.getElementById('editStudent').value.trim(),
+        school: document.getElementById('editSchool').value.trim(),
+        grade: document.getElementById('editGrade').value
+      };
+
+      const btn = document.getElementById('updateBtn');
+      btn.disabled = true;
+
+      const res = await apiCall('updateRegistration', formData);
+      btn.disabled = false;
+
+      if (res.success) {
+        alert(res.message);
+        showView('view-home');
+      } else {
+        alert(res.message);
+      }
+    }
+
+    // 4. 點名登入
+    function openAdminModal() {
+      showView('view-admin');
+      document.getElementById('adminLoginBox').classList.remove('hidden');
+      document.getElementById('adminPanel').classList.add('hidden');
+      document.getElementById('adminPwd').value = '';
+    }
+
+    async function loginAdmin() {
+      const pwd = document.getElementById('adminPwd').value.trim();
+      if (!pwd) return;
+
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+
+      const res = await apiCall('getAdminData', { password: pwd });
+      btn.disabled = false;
+
+      if (res.success) {
+        document.getElementById('adminLoginBox').classList.add('hidden');
+        document.getElementById('adminPanel').classList.remove('hidden');
+        adminLocalList = res.list;
+        updateAdminStats();
+        setTimeout(() => document.getElementById('checkInInput').focus(), 300);
+      } else {
+        alert(res.message);
+      }
+    }
+
+    // 5. 相機掃描啟動 / 關閉邏輯
+    function startScanner() {
+      if (isScanning) return;
+      html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        onScanSuccess
+      ).then(() => {
+        isScanning = true;
+        document.getElementById('startScanBtn').classList.add('hidden');
+        document.getElementById('stopScanBtn').classList.remove('hidden');
+      }).catch(err => {
+        alert('無法開啟相機，請確保已允許瀏覽器使用相機權限！\n' + err);
+      });
+    }
+
+    function stopScanner() {
+      if (html5QrCode && isScanning) {
+        html5QrCode.stop().then(() => {
+          html5QrCode.clear();
+          isScanning = false;
+          document.getElementById('startScanBtn').classList.remove('hidden');
+          document.getElementById('stopScanBtn').classList.add('hidden');
+        }).catch(err => console.error(err));
+      }
+    }
+
+    // QR Code 掃描成功觸發
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      // 防呆：3秒內禁止重複掃描相同 QR Code
+      if (decodedText === lastScannedCode && (now - lastScanTime) < 3000) {
+        return;
+      }
+      lastScannedCode = decodedText;
+      lastScanTime = now;
+
+      document.getElementById('checkInInput').value = decodedText;
+      executeCheckIn();
+    }
+
+    function handleAdminSubmit(e) {
+      e.preventDefault();
+      executeCheckIn();
+    }
+
+    async function executeCheckIn() {
+      const inputEl = document.getElementById('checkInInput');
+      const input = inputEl.value.trim();
+      if (!input) return;
+
+      const msgBox = document.getElementById('checkInMsg');
+      msgBox.innerHTML = '<div class="p-3 border-4 border-black bg-gray-100 font-bold text-center">點名寫入中...</div>';
+
+      const res = await apiCall('markCheckIn', { query: input });
+      inputEl.value = '';
+      inputEl.focus();
+
+      if (res.success) {
+        if (res.alreadyAttended) {
+          msgBox.innerHTML = `
+            <div class="border-4 border-black bg-neo-secondary p-4 font-bold text-base shadow-neo-sm">
+              ⚠️ <b>重複點名警告！</b><br>
+              ${res.parentName} 家長（學生：${res.studentName}，${res.attendees}位）<br>
+              已於 <b>${res.checkInTime}</b> 完成點名！
+            </div>`;
+        } else {
+          msgBox.innerHTML = `
+            <div class="border-4 border-black bg-neo-accent text-white p-4 font-bold text-base shadow-neo-sm">
+              ✅ <b>點名成功！</b><br>
+              ${res.parentName} 家長（學生：${res.studentName}）<br>
+              出席人數：<b>${res.attendees}</b> 人
+            </div>`;
+          
+          const item = adminLocalList.find(x => x.code === res.code || x.phone === input);
+          if (item) item.attended = true;
+          updateAdminStats();
+        }
+      } else {
+        msgBox.innerHTML = `<div class="border-4 border-black bg-red-400 text-black p-4 font-bold text-base shadow-neo-sm">❌ ${res.message}</div>`;
+      }
+    }
+
+    function updateAdminStats() {
+      const total = adminLocalList.length;
+      const attendedItems = adminLocalList.filter(x => x.attended);
+      const attendedCount = attendedItems.length;
+      const totalPeople = attendedItems.reduce((sum, item) => sum + Number(item.attendees), 0);
+
+      document.getElementById('statTotal').innerText = total;
+      document.getElementById('statAttended').innerText = attendedCount;
+      document.getElementById('statPeople').innerText = totalPeople;
+    }
+
+    function exitAdmin() {
+      stopScanner();
+      showView('view-home');
+    }
+  </script>
+
+</body>
+</html>
