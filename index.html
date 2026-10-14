@@ -312,7 +312,13 @@
 
     <!-- 5. 點名介面 View -->
     <div id="view-admin" class="view card-neo p-6 md:p-8 bg-white">
-      <h3 class="text-3xl font-black uppercase mb-4 border-b-4 border-black pb-2">現場點名工作台</h3>
+      <div class="flex justify-between items-center mb-4 border-b-4 border-black pb-2">
+        <h3 class="text-3xl font-black uppercase">現場點名工作台</h3>
+        <!-- 同步狀態 Badge -->
+        <span id="syncBadge" class="hidden text-xs font-black px-2 py-1 border-2 border-black bg-green-400 text-black shadow-neo-sm">
+          ✅ 已全數同步
+        </span>
+      </div>
 
       <div id="adminLoginBox" class="space-y-4">
         <div>
@@ -387,6 +393,89 @@
     let lastScannedCode = '';
     let lastScanTime = 0;
 
+    let adminPassword = '';
+    let pollTimer = null;
+    let wakeLock = null;
+
+    // 1. 失敗隊列 (Failed Queue) 管理
+    let offlineQueue = JSON.parse(localStorage.getItem('checkin_queue') || '[]');
+
+    function saveQueue() {
+      localStorage.setItem('checkin_queue', JSON.stringify(offlineQueue));
+      updateSyncBadge();
+    }
+
+    function updateSyncBadge() {
+      const badge = document.getElementById('syncBadge');
+      if (!badge) return;
+      if (offlineQueue.length > 0) {
+        badge.innerHTML = `⚠️ 未同步: ${offlineQueue.length} 筆`;
+        badge.classList.remove('hidden');
+        badge.className = "text-xs font-black px-2 py-1 border-2 border-black bg-neo-accent text-white shadow-neo-sm animate-pulse";
+      } else {
+        badge.innerHTML = `✅ 已全數同步`;
+        badge.classList.remove('hidden');
+        badge.className = "text-xs font-black px-2 py-1 border-2 border-black bg-green-400 text-black shadow-neo-sm";
+      }
+    }
+
+    // 背景每 5 秒嘗試將離線隊列上傳至 Google Sheet
+    setInterval(async () => {
+      if (offlineQueue.length === 0) return;
+      const current = offlineQueue[0];
+      try {
+        const res = await apiCall('markCheckIn', { query: current.query });
+        if (res.success || (res.message && res.message.includes('已完成點名'))) {
+          offlineQueue.shift();
+          saveQueue();
+        }
+      } catch (e) {
+        console.warn('離線隊列同步重試中...', e);
+      }
+    }, 5000);
+
+    // 2. 多台 iPad 背景輪詢同步 (Polling every 20 seconds)
+    function startPolling() {
+      stopPolling();
+      pollTimer = setInterval(async () => {
+        if (!adminPassword) return;
+        const res = await apiCall('getAdminData', { password: adminPassword });
+        if (res.success && res.list) {
+          // 合併伺服器資料與本地未同步狀態
+          res.list.forEach(serverItem => {
+            const localItem = adminLocalList.find(x => x.code === serverItem.code);
+            if (localItem && localItem.attended) {
+              serverItem.attended = true;
+            }
+          });
+          adminLocalList = res.list;
+          updateAdminStats();
+        }
+      }, 20000);
+    }
+
+    function stopPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = null;
+    }
+
+    // 3. Screen Wake Lock API (防止 iPad 休眠)
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.log('WakeLock 無法啟用:', err);
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release().then(() => { wakeLock = null; });
+      }
+    }
+
     // Web Audio API 原生音效合成器
     let audioCtx = null;
 
@@ -440,15 +529,14 @@
       }
     }
 
-    // 格式化目前香港時間 (yyyy-MM-dd HH:mm:ss)
     function getFormattedNowHK() {
       const now = new Date();
       const pad = n => n.toString().padStart(2, '0');
       return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
     }
 
-    // 頁面載入時請求小學名單
     window.addEventListener('DOMContentLoaded', async () => {
+      updateSyncBadge();
       const res = await apiCall('getSchoolList');
       if (res.success && res.list && res.list.length > 0) {
         const list = document.getElementById('primarySchoolsList');
@@ -461,9 +549,11 @@
       }
     });
 
-    // 切換 View 頁面並平滑滾動至最頂端
     function showView(viewId) {
       stopScanner();
+      stopPolling();
+      releaseWakeLock();
+
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById(viewId).classList.add('active');
       document.getElementById('editBox').classList.add('hidden');
@@ -472,7 +562,7 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // 1. 處理報名提交
+    // 1. 報名提交
     async function handleRegister(e) {
       e.preventDefault();
       const phone = document.getElementById('regPhone').value.trim();
@@ -505,7 +595,6 @@
       }
     }
 
-    // 渲染確認卡與專屬 QR Code
     function showConfirmationCard(code, data) {
       document.getElementById('cardCode').innerText = code;
       document.getElementById('cardParent').innerText = data.parentName;
@@ -527,7 +616,7 @@
       showView('view-confirm');
     }
 
-    // 2. 處理查詢
+    // 2. 查詢
     async function handleQuery() {
       const code = document.getElementById('qCode').value.trim();
       const phone = document.getElementById('qPhone').value.trim();
@@ -562,7 +651,7 @@
       }
     }
 
-    // 3. 處理更新
+    // 3. 更新
     async function handleUpdate(e) {
       e.preventDefault();
       const formData = {
@@ -610,10 +699,17 @@
       btn.disabled = false;
 
       if (res.success) {
+        adminPassword = pwd;
         document.getElementById('adminLoginBox').classList.add('hidden');
         document.getElementById('adminPanel').classList.remove('hidden');
+        
         adminLocalList = res.list;
         updateAdminStats();
+        
+        // 開啟 iPad 恆亮與背景輪詢
+        requestWakeLock();
+        startPolling();
+
         setTimeout(() => document.getElementById('checkInInput').focus(), 300);
       } else {
         alert(res.message);
@@ -668,8 +764,8 @@
       executeCheckIn();
     }
 
-    // ⚡ 方案 1：零延遲本地記憶體比對 + 背景非同步同步
-    function executeCheckIn() {
+    // ⚡ 核心：0.05秒極速點名 + 失敗隊列 + 即時報名 Fallback
+    async function executeCheckIn() {
       initAudio();
       const inputEl = document.getElementById('checkInInput');
       const input = inputEl.value.trim().replace(/\D/g, '');
@@ -677,11 +773,21 @@
 
       const msgBox = document.getElementById('checkInMsg');
 
-      // 1. 本地記憶體極速搜尋（< 0.05 毫秒）
-      const item = adminLocalList.find(x => x.code === input || x.phone === input);
+      // Step A: 本地記憶體極速搜尋
+      let item = adminLocalList.find(x => x.code === input || x.phone === input);
 
+      // Step B: 若本地找不到，發起 Fallback 極速後端比對 (對應即時 Walk-in 家長)
       if (!item) {
-        // 🔴 找不到紀錄
+        msgBox.innerHTML = `<div class="p-3 border-4 border-black bg-neo-secondary font-bold text-center">🔎 搜尋最新報名紀錄中...</div>`;
+        const refreshRes = await apiCall('getAdminData', { password: adminPassword });
+        if (refreshRes.success && refreshRes.list) {
+          adminLocalList = refreshRes.list;
+          item = adminLocalList.find(x => x.code === input || x.phone === input);
+        }
+      }
+
+      // 找不到紀錄
+      if (!item) {
         playSound('error');
         msgBox.innerHTML = `<div class="border-4 border-black bg-red-400 text-black p-4 font-bold text-base shadow-neo-sm">❌ 找不到對應的 5位字碼 或 8位電話！</div>`;
         inputEl.value = '';
@@ -689,8 +795,8 @@
         return;
       }
 
+      // 重複點名
       if (item.attended) {
-        // 🟡 重複點名
         playSound('warning');
         msgBox.innerHTML = `
           <div class="border-4 border-black bg-neo-secondary p-4 font-bold text-base shadow-neo-sm">
@@ -716,21 +822,18 @@
           出席人數：<b>${item.attendees}</b> 人
         </div>`;
 
-      // 即時更新計數器
+      // 即時更新數據看板
       updateAdminStats();
 
-      // 清空輸入框並瞬間重新 Focus（準備接下一位家長）
+      // 清空輸入框並瞬間重新 Focus
       inputEl.value = '';
       inputEl.focus();
 
-      // 2. 背景非同步同步至 Google Sheets (不阻塞 UI)
-      apiCall('markCheckIn', { query: input }).then(res => {
-        if (!res.success) {
-          console.warn('背景寫入 Sheet 提示：', res.message);
-        }
-      }).catch(err => {
-        console.error('背景網絡同步錯誤：', err);
-      });
+      // 加入背景同步離線隊列 (Save to Offline Queue)
+      if (!offlineQueue.some(q => q.query === input)) {
+        offlineQueue.push({ query: input, time: checkInTimeStr });
+        saveQueue();
+      }
     }
 
     function updateAdminStats() {
@@ -746,6 +849,8 @@
 
     function exitAdmin() {
       stopScanner();
+      stopPolling();
+      releaseWakeLock();
       showView('view-home');
     }
   </script>
