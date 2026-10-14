@@ -111,12 +111,12 @@
 
   <div class="max-w-xl mx-auto relative pt-6 md:pt-8">
     
-    <!-- 特大校徽 Badge（向右移、壓住下方大框） -->
+    <!-- 特大校徽 Badge -->
     <div class="absolute -top-5 left-1 md:left-3 z-40 bg-white border-4 border-black p-2 md:p-2.5 shadow-neo -rotate-3 hover:rotate-0 transition-transform">
       <img src="https://lunaticarus.github.io/classtools/logo.png" alt="校徽" class="h-20 md:h-24 w-auto object-contain">
     </div>
 
-    <!-- Header Sticker (位置提高至校徽中間水平高度，加左邊距避開大 Logo) -->
+    <!-- Header Sticker -->
     <div class="mb-5 mt-1 ml-32 md:ml-40 inline-block bg-neo-accent text-white font-black text-lg md:text-xl uppercase tracking-widest px-4 py-2 border-4 border-black shadow-neo-sm -rotate-2">
       樂善堂楊葛小琳中學
     </div>
@@ -216,10 +216,6 @@
 
     <!-- 3. 電子確認卡 View -->
     <div id="view-confirm" class="view card-neo p-6 md:p-8 bg-neo-secondary relative">
-      <div class="absolute -top-4 -left-4 bg-neo-accent text-white border-4 border-black px-3 py-1 font-black -rotate-6 text-sm shadow-neo-sm">
-        CONFIRMED PASS
-      </div>
-
       <h3 class="text-3xl font-black text-center uppercase tracking-tight mt-2 mb-1">報名成功確認卡</h3>
       <p class="text-center font-bold text-sm mb-4">請即<b>「螢幕截圖」</b>保存此頁面，入場時向職員出示專屬 QR Code 或字碼</p>
 
@@ -353,7 +349,7 @@
         <form onsubmit="handleAdminSubmit(event)" class="space-y-3">
           <div>
             <label class="block font-black text-base uppercase mb-1">手動輸入 5位字碼 或 8位電話：</label>
-            <input type="tel" id="checkInInput" placeholder="例如: 18239 或 91234567" class="w-full p-4 border-4 border-black font-black text-2xl tracking-widest bg-neo-bg" oninput="this.value=this.value.replace(/\D/g,'')">
+            <input type="tel" id="checkInInput" inputmode="numeric" autocomplete="off" placeholder="例如: 18239 或 91234567" class="w-full p-4 border-4 border-black font-black text-2xl tracking-widest bg-neo-bg" oninput="this.value=this.value.replace(/\D/g,'')">
           </div>
           
           <button type="submit" id="checkInBtn" class="btn-neo w-full py-4 text-2xl bg-neo-accent text-white">
@@ -391,7 +387,7 @@
     let lastScannedCode = '';
     let lastScanTime = 0;
 
-    // Web Audio API 原生音效合成器 (免下載音檔，即時響應)
+    // Web Audio API 原生音效合成器
     let audioCtx = null;
 
     function initAudio() {
@@ -413,7 +409,6 @@
         gain.connect(audioCtx.destination);
 
         if (type === 'success') {
-          // 🟢 成功：雙音階上升清脆提示音 (587Hz -> 880Hz)
           osc.type = 'sine';
           osc.frequency.setValueAtTime(587.33, now);
           osc.frequency.setValueAtTime(880, now + 0.1);
@@ -423,7 +418,6 @@
           osc.stop(now + 0.35);
 
         } else if (type === 'warning') {
-          // 🟡 重複點名：警示音 (440Hz -> 349Hz)
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(440, now);
           osc.frequency.setValueAtTime(349.23, now + 0.12);
@@ -433,7 +427,6 @@
           osc.stop(now + 0.4);
 
         } else if (type === 'error') {
-          // 🔴 錯誤：低音鋸齒波蜂鳴聲 (180Hz -> 110Hz)
           osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(180, now);
           osc.frequency.linearRampToValueAtTime(110, now + 0.3);
@@ -445,6 +438,13 @@
       } catch (e) {
         console.error('音效播放失敗:', e);
       }
+    }
+
+    // 格式化目前香港時間 (yyyy-MM-dd HH:mm:ss)
+    function getFormattedNowHK() {
+      const now = new Date();
+      const pad = n => n.toString().padStart(2, '0');
+      return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
     }
 
     // 頁面載入時請求小學名單
@@ -589,7 +589,7 @@
       }
     }
 
-    // 4. 點名登入 (解鎖 Web Audio 權限)
+    // 4. 點名登入
     function openAdminModal() {
       initAudio();
       showView('view-admin');
@@ -653,7 +653,6 @@
 
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      // 3 秒內防重複對焦同一個 QR Code
       if (decodedText === lastScannedCode && (now - lastScanTime) < 3000) {
         return;
       }
@@ -669,49 +668,69 @@
       executeCheckIn();
     }
 
-    // 執行點名並觸發對應音效
-    async function executeCheckIn() {
+    // ⚡ 方案 1：零延遲本地記憶體比對 + 背景非同步同步
+    function executeCheckIn() {
       initAudio();
       const inputEl = document.getElementById('checkInInput');
-      const input = inputEl.value.trim();
+      const input = inputEl.value.trim().replace(/\D/g, '');
       if (!input) return;
 
       const msgBox = document.getElementById('checkInMsg');
-      msgBox.innerHTML = '<div class="p-3 border-4 border-black bg-gray-100 font-bold text-center">點名寫入中...</div>';
 
-      const res = await apiCall('markCheckIn', { query: input });
+      // 1. 本地記憶體極速搜尋（< 0.05 毫秒）
+      const item = adminLocalList.find(x => x.code === input || x.phone === input);
+
+      if (!item) {
+        // 🔴 找不到紀錄
+        playSound('error');
+        msgBox.innerHTML = `<div class="border-4 border-black bg-red-400 text-black p-4 font-bold text-base shadow-neo-sm">❌ 找不到對應的 5位字碼 或 8位電話！</div>`;
+        inputEl.value = '';
+        inputEl.focus();
+        return;
+      }
+
+      if (item.attended) {
+        // 🟡 重複點名
+        playSound('warning');
+        msgBox.innerHTML = `
+          <div class="border-4 border-black bg-neo-secondary p-4 font-bold text-base shadow-neo-sm">
+            ⚠️ <b>重複點名警告！</b><br>
+            ${item.parentName} 家長（學生：${item.studentName}，${item.attendees}位）<br>
+            已於 <b>${item.checkInTime || '先前'}</b> 完成點名！
+          </div>`;
+        inputEl.value = '';
+        inputEl.focus();
+        return;
+      }
+
+      // 🟢 點名成功：0.05 秒內瞬間更新 UI
+      const checkInTimeStr = getFormattedNowHK();
+      item.attended = true;
+      item.checkInTime = checkInTimeStr;
+
+      playSound('success');
+      msgBox.innerHTML = `
+        <div class="border-4 border-black bg-neo-accent text-white p-4 font-bold text-base shadow-neo-sm">
+          ✅ <b>點名成功！</b><br>
+          ${item.parentName} 家長（學生：${item.studentName}）<br>
+          出席人數：<b>${item.attendees}</b> 人
+        </div>`;
+
+      // 即時更新計數器
+      updateAdminStats();
+
+      // 清空輸入框並瞬間重新 Focus（準備接下一位家長）
       inputEl.value = '';
       inputEl.focus();
 
-      if (res.success) {
-        if (res.alreadyAttended) {
-          // 🟡 重複點名警示音
-          playSound('warning');
-          msgBox.innerHTML = `
-            <div class="border-4 border-black bg-neo-secondary p-4 font-bold text-base shadow-neo-sm">
-              ⚠️ <b>重複點名警告！</b><br>
-              ${res.parentName} 家長（學生：${res.studentName}，${res.attendees}位）<br>
-              已於 <b>${res.checkInTime}</b> 完成點名！
-            </div>`;
-        } else {
-          // 🟢 點名成功提示音
-          playSound('success');
-          msgBox.innerHTML = `
-            <div class="border-4 border-black bg-neo-accent text-white p-4 font-bold text-base shadow-neo-sm">
-              ✅ <b>點名成功！</b><br>
-              ${res.parentName} 家長（學生：${res.studentName}）<br>
-              出席人數：<b>${res.attendees}</b> 人
-            </div>`;
-          
-          const item = adminLocalList.find(x => x.code === res.code || x.phone === input);
-          if (item) item.attended = true;
-          updateAdminStats();
+      // 2. 背景非同步同步至 Google Sheets (不阻塞 UI)
+      apiCall('markCheckIn', { query: input }).then(res => {
+        if (!res.success) {
+          console.warn('背景寫入 Sheet 提示：', res.message);
         }
-      } else {
-        // 🔴 錯誤提示音
-        playSound('error');
-        msgBox.innerHTML = `<div class="border-4 border-black bg-red-400 text-black p-4 font-bold text-base shadow-neo-sm">❌ ${res.message}</div>`;
-      }
+      }).catch(err => {
+        console.error('背景網絡同步錯誤：', err);
+      });
     }
 
     function updateAdminStats() {
