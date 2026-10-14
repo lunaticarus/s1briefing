@@ -312,15 +312,10 @@
 
     <!-- 5. 點名介面 View -->
     <div id="view-admin" class="view card-neo p-6 md:p-8 bg-white">
-      <div class="flex justify-between items-center mb-4 border-b-4 border-black pb-2">
-        <h3 class="text-3xl font-black uppercase">現場點名工作台</h3>
-        <!-- 同步狀態 Badge -->
-        <span id="syncBadge" class="hidden text-xs font-black px-2 py-1 border-2 border-black bg-green-400 text-black shadow-neo-sm">
-          ✅ 已全數同步
-        </span>
-      </div>
-
+      
+      <!-- 未登入前：密碼登入區 -->
       <div id="adminLoginBox" class="space-y-4">
+        <h3 class="text-3xl font-black uppercase mb-4 border-b-4 border-black pb-2">工作人員點名登入</h3>
         <div>
           <label class="block font-black text-base uppercase mb-1">輸入點名管理密碼</label>
           <input type="password" id="adminPwd" class="w-full p-3 border-4 border-black font-bold text-lg">
@@ -333,7 +328,15 @@
         </button>
       </div>
 
+      <!-- 登入成功後：點名工作台 Panel -->
       <div id="adminPanel" class="hidden space-y-4">
+        <div class="flex justify-between items-center mb-4 border-b-4 border-black pb-2">
+          <h3 class="text-3xl font-black uppercase">現場點名工作台</h3>
+          <!-- 同步狀態 Badge (僅登入後顯示) -->
+          <span id="syncBadge" class="hidden text-xs font-black px-2 py-1 border-2 border-black bg-green-400 text-black shadow-neo-sm">
+            ✅ 已全數同步
+          </span>
+        </div>
         
         <!-- 相機 QR Code 掃描區 -->
         <div class="border-4 border-black p-3 bg-neo-bg shadow-neo-sm">
@@ -408,6 +411,14 @@
     function updateSyncBadge() {
       const badge = document.getElementById('syncBadge');
       if (!badge) return;
+
+      // 若尚未登入解鎖，不顯示 Badge
+      const adminPanel = document.getElementById('adminPanel');
+      if (adminPanel && adminPanel.classList.contains('hidden')) {
+        badge.classList.add('hidden');
+        return;
+      }
+
       if (offlineQueue.length > 0) {
         badge.innerHTML = `⚠️ 未同步: ${offlineQueue.length} 筆`;
         badge.classList.remove('hidden');
@@ -441,7 +452,6 @@
         if (!adminPassword) return;
         const res = await apiCall('getAdminData', { password: adminPassword });
         if (res.success && res.list) {
-          // 合併伺服器資料與本地未同步狀態
           res.list.forEach(serverItem => {
             const localItem = adminLocalList.find(x => x.code === serverItem.code);
             if (localItem && localItem.attended) {
@@ -459,7 +469,7 @@
       pollTimer = null;
     }
 
-    // 3. Screen Wake Lock API (防止 iPad 休眠)
+    // 3. Screen Wake Lock API
     async function requestWakeLock() {
       try {
         if ('wakeLock' in navigator) {
@@ -536,7 +546,6 @@
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
-      updateSyncBadge();
       const res = await apiCall('getSchoolList');
       if (res.success && res.list && res.list.length > 0) {
         const list = document.getElementById('primarySchoolsList');
@@ -685,6 +694,7 @@
       document.getElementById('adminLoginBox').classList.remove('hidden');
       document.getElementById('adminPanel').classList.add('hidden');
       document.getElementById('adminPwd').value = '';
+      updateSyncBadge();
     }
 
     async function loginAdmin() {
@@ -705,8 +715,8 @@
         
         adminLocalList = res.list;
         updateAdminStats();
+        updateSyncBadge(); // 登入成功後才顯示同步狀態 Badge
         
-        // 開啟 iPad 恆亮與背景輪詢
         requestWakeLock();
         startPolling();
 
@@ -764,7 +774,6 @@
       executeCheckIn();
     }
 
-    // ⚡ 核心：0.05秒極速點名 + 失敗隊列 + 即時報名 Fallback
     async function executeCheckIn() {
       initAudio();
       const inputEl = document.getElementById('checkInInput');
@@ -776,7 +785,7 @@
       // Step A: 本地記憶體極速搜尋
       let item = adminLocalList.find(x => x.code === input || x.phone === input);
 
-      // Step B: 若本地找不到，發起 Fallback 極速後端比對 (對應即時 Walk-in 家長)
+      // Step B: 若本地找不到，發起 Fallback 極速後端比對
       if (!item) {
         msgBox.innerHTML = `<div class="p-3 border-4 border-black bg-neo-secondary font-bold text-center">🔎 搜尋最新報名紀錄中...</div>`;
         const refreshRes = await apiCall('getAdminData', { password: adminPassword });
@@ -786,7 +795,6 @@
         }
       }
 
-      // 找不到紀錄
       if (!item) {
         playSound('error');
         msgBox.innerHTML = `<div class="border-4 border-black bg-red-400 text-black p-4 font-bold text-base shadow-neo-sm">❌ 找不到對應的 5位字碼 或 8位電話！</div>`;
@@ -795,7 +803,6 @@
         return;
       }
 
-      // 重複點名
       if (item.attended) {
         playSound('warning');
         msgBox.innerHTML = `
@@ -822,14 +829,12 @@
           出席人數：<b>${item.attendees}</b> 人
         </div>`;
 
-      // 即時更新數據看板
       updateAdminStats();
 
-      // 清空輸入框並瞬間重新 Focus
       inputEl.value = '';
       inputEl.focus();
 
-      // 加入背景同步離線隊列 (Save to Offline Queue)
+      // 加入離線隊列
       if (!offlineQueue.some(q => q.query === input)) {
         offlineQueue.push({ query: input, time: checkInTimeStr });
         saveQueue();
